@@ -23,8 +23,8 @@ pending_orders = {}  # Заказы, ожидающие подтверждени
 async def start_handler(message: types.Message):
     markup = ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add(KeyboardButton("Днепр"))
-    await message.answer(
-        f"Ку бро, - {message.from_user.username or message.from_user.first_name}
+
+    await message.answer(f"Ку бро, - {message.from_user.username or message.from_user.first_name}")
 
 "
         "Рад тебя видеть в нашем шопе.
