@@ -1,4 +1,3 @@
-
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils import executor
@@ -24,13 +23,10 @@ async def start_handler(message: types.Message):
     markup = ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add(KeyboardButton("Днепр"))
 
-    await message.answer(f"Ку бро, - {message.from_user.username or message.from_user.first_name}")
-
-"
-        "Рад тебя видеть в нашем шопе.
-"
-        "Оператор: @shmalebanutaya
-"
+    await message.answer(
+        f"Ку бро, - {message.from_user.username or message.from_user.first_name}\n\n"
+        "Рад тебя видеть в нашем шопе.\n"
+        "Оператор: @shmalebanutaya\n"
         "Не забудь подписаться на канал - [ссылка]",
         reply_markup=markup
     )
