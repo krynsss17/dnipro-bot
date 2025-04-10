@@ -5,22 +5,21 @@ from aiogram.dispatcher.filters import Command
 import logging
 import random
 
-# === CONFIG ===
 API_TOKEN = '7596145421:AAFMkGYtjaJRxwP-G5sl-t3lj7jxQaPboqE'
-ADMIN_ID = 8070055531  # Telegram ID админа
+ADMIN_ID = 8070055531
 
-# === SETUP ===
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 logging.basicConfig(level=logging.INFO)
-user_orders = {}  # Словарь для хранения заказов по user_id
-pending_orders = {}  # Заказы, ожидающие подтверждения
-awaiting_photo_to_send = {}  # Временное хранилище для режима отправки фото пользователю
 
-# === HANDLERS ===
+user_orders = {}
+pending_orders = {}
+all_orders = {}
+awaiting_photo_to_send = {}
 
 @dp.message_handler(commands=['start'])
 async def start_handler(message: types.Message):
+    user_orders.pop(message.from_user.id, None)  # чистим прошлые заказы
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("Днепр", callback_data="city_dnepr"))
 
@@ -88,12 +87,15 @@ async def area_selected(callback_query: types.CallbackQuery):
         "area": area
     })
 
-    user_orders[callback_query.from_user.id] = data
-    pending_orders[order_id] = {
+    full_order = {
         **data,
         "user_id": callback_query.from_user.id,
         "username": callback_query.from_user.username
     }
+
+    user_orders[callback_query.from_user.id] = data
+    pending_orders[order_id] = full_order
+    all_orders[order_id] = full_order
 
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("💳 Оплата на карту", callback_data="pay_card"))
@@ -193,11 +195,7 @@ async def send_photo_command(message: types.Message):
         return await message.reply("Укажи номер заказа. Пример: /send 70214")
 
     order_id = int(args[1])
-    order = None
-    for o in pending_orders.values():
-        if o["order_id"] == order_id:
-            order = o
-            break
+    order = all_orders.get(order_id)
 
     if not order:
         return await message.reply("Заказ с таким номером не найден.")
@@ -214,17 +212,12 @@ async def admin_send_photo_to_user(message: types.Message):
         return
 
     order_id = awaiting_photo_to_send.pop(message.from_user.id)
-    user = None
-    for o in pending_orders.values():
-        if o["order_id"] == order_id:
-            user = o["user_id"]
-            break
-
-    if not user:
+    order = all_orders.get(order_id)
+    if not order:
         return await message.reply("Пользователь не найден.")
 
-    await bot.send_message(user, f"📦 Фото по заказу #{order_id}")
-    await bot.forward_message(user, message.chat.id, message.message_id)
+    await bot.send_message(order["user_id"], f"📦 Фото по заказу #{order_id}")
+    await bot.forward_message(order["user_id"], message.chat.id, message.message_id)
     await message.reply(f"Фото успешно отправлено пользователю заказа #{order_id}.")
 
 if __name__ == "__main__":
