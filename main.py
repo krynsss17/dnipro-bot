@@ -1,5 +1,5 @@
 from aiogram import Bot, Dispatcher, types
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils import executor
 from aiogram.dispatcher.filters import Command
 import logging
@@ -20,8 +20,8 @@ pending_orders = {}  # Заказы, ожидающие подтверждени
 
 @dp.message_handler(commands=['start'])
 async def start_handler(message: types.Message):
-    markup = ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.add(KeyboardButton("Днепр"))
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton("Днепр", callback_data="city_dnepr"))
 
     await message.answer(
         f"Ку бро, - {message.from_user.username or message.from_user.first_name}\n\n"
@@ -31,63 +31,80 @@ async def start_handler(message: types.Message):
         reply_markup=markup
     )
 
-@dp.message_handler(lambda message: message.text == "Днепр")
-async def city_selected(message: types.Message):
-    markup = ReplyKeyboardMarkup(resize_keyboard=True)
+@dp.callback_query_handler(lambda c: c.data == "city_dnepr")
+async def city_selected(callback_query: types.CallbackQuery):
+    markup = InlineKeyboardMarkup(row_width=1)
     markup.add(
-        "Товар 1 - 1гр - 300 грн",
-        "Товар 2 - 2гр - 570 грн",
-        "Товар 3 - 3гр - 820 грн"
+        InlineKeyboardButton("Товар 1 - 1гр - 300 грн", callback_data="product_1"),
+        InlineKeyboardButton("Товар 2 - 2гр - 570 грн", callback_data="product_2"),
+        InlineKeyboardButton("Товар 3 - 3гр - 820 грн", callback_data="product_3")
     )
-    await message.answer("Вы выбрали город Днепр.\nЧто тебе присмотрелось?", reply_markup=markup)
+    await callback_query.message.edit_text("Вы выбрали город Днепр.\nЧто тебе присмотрелось?", reply_markup=markup)
 
-@dp.message_handler(lambda message: "Товар" in message.text)
-async def product_selected(message: types.Message):
-    product_name = message.text
+@dp.callback_query_handler(lambda c: c.data.startswith("product_"))
+async def product_selected(callback_query: types.CallbackQuery):
+    product_map = {
+        "product_1": "Товар 1 - 1гр - 300 грн",
+        "product_2": "Товар 2 - 2гр - 570 грн",
+        "product_3": "Товар 3 - 3гр - 820 грн",
+    }
+    product_name = product_map[callback_query.data]
     price = product_name.split('-')[-1].strip()
 
-    user_orders[message.from_user.id] = {
+    user_orders[callback_query.from_user.id] = {
         "product": product_name,
         "price": price
     }
 
-    markup = ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.add("Кирова", "Начало пр. Богдана Хмельницкого")
-    await message.answer(
+    markup = InlineKeyboardMarkup(row_width=1)
+    markup.add(
+        InlineKeyboardButton("Кирова", callback_data="area_kirova"),
+        InlineKeyboardButton("Начало пр. Богдана Хмельницкого", callback_data="area_bh")
+    )
+    await callback_query.message.edit_text(
         f"Избран продукт: {product_name}\n"
         f"Коротко о товаре: (сам изменишь)\n"
         f"Цена: {price}\n"
         "Выберите подходящий район:", reply_markup=markup
     )
 
-@dp.message_handler(lambda message: message.text in ["Кирова", "Начало пр. Богдана Хмельницкого"])
-async def area_selected(message: types.Message):
-    data = user_orders.get(message.from_user.id)
+@dp.callback_query_handler(lambda c: c.data.startswith("area_"))
+async def area_selected(callback_query: types.CallbackQuery):
+    data = user_orders.get(callback_query.from_user.id)
     if not data:
-        return await message.answer("Что-то пошло не так. Попробуй снова /start")
+        return await callback_query.message.edit_text("Что-то пошло не так. Попробуй снова /start")
+
+    area_map = {
+        "area_kirova": "Кирова",
+        "area_bh": "Начало пр. Богдана Хмельницкого"
+    }
+    area = area_map[callback_query.data]
 
     order_id = random.randint(20000, 99999)
-    data["order_id"] = order_id
-    data["city"] = "Днепр"
-    data["area"] = message.text
+    data.update({
+        "order_id": order_id,
+        "city": "Днепр",
+        "area": area
+    })
 
-    markup = ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.add("Оплата на карту", "/start")
+    user_orders[callback_query.from_user.id] = data
+    pending_orders[order_id] = {
+        **data,
+        "user_id": callback_query.from_user.id,
+        "username": callback_query.from_user.username
+    }
 
-    await message.answer(
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton("💳 Оплата на карту", callback_data="pay_card"))
+
+    await callback_query.message.edit_text(
         f"Заказ создан! Адрес забронирован!\n\n"
         f"Ваш заказ №: {order_id}\n"
         f"Город: {data['city']}\n"
         f"Товар: {data['product']}\n"
         f"Цена: {data['price']}\n"
-        f"Выберите удобный метод платы:", reply_markup=markup
+        f"Метод оплаты:", reply_markup=markup
     )
-
-    pending_orders[order_id] = {
-        **data,
-        "user_id": message.from_user.id,
-        "username": message.from_user.username
-    }
 
     admin_markup = InlineKeyboardMarkup()
     admin_markup.add(
@@ -97,20 +114,20 @@ async def area_selected(message: types.Message):
 
     await bot.send_message(ADMIN_ID,
         f"📦 Новый заказ #{order_id}\n"
-        f"Юзер: @{message.from_user.username}\n"
+        f"Юзер: @{callback_query.from_user.username}\n"
         f"Товар: {data['product']}\n"
         f"Цена: {data['price']}\n"
         f"Район: {data['area']}",
         reply_markup=admin_markup
     )
 
-@dp.message_handler(lambda message: message.text == "Оплата на карту")
-async def payment_selected(message: types.Message):
-    data = user_orders.get(message.from_user.id)
+@dp.callback_query_handler(lambda c: c.data == "pay_card")
+async def payment_selected(callback_query: types.CallbackQuery):
+    data = user_orders.get(callback_query.from_user.id)
     if not data:
-        return await message.answer("Сначала выбери товар /start")
+        return await callback_query.message.edit_text("Сначала выбери товар /start")
 
-    await message.answer(
+    await callback_query.message.edit_text(
         f"Ваш заказ №: {data['order_id']}\n"
         f"Город: {data['city']}\n"
         f"Товар: {data['product']}\n"
