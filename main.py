@@ -15,6 +15,7 @@ dp = Dispatcher(bot)
 logging.basicConfig(level=logging.INFO)
 user_orders = {}  # Словарь для хранения заказов по user_id
 pending_orders = {}  # Заказы, ожидающие подтверждения
+awaiting_photo_to_send = {}  # Временное хранилище для режима отправки фото пользователю
 
 # === HANDLERS ===
 
@@ -143,7 +144,7 @@ async def handle_photo(message: types.Message):
     if message.from_user.id not in user_orders:
         return await message.reply("Сначала выбери товар /start")
 
-    await bot.send_message(ADMIN_ID, f"📤 Скрин оплаты от @{message.from_user.username} для заказа #{user_orders[message.from_user.id]['order_id']}")
+    await bot.send_message(ADMIN_ID, f"📄 Скрин оплаты от @{message.from_user.username} для заказа #{user_orders[message.from_user.id]['order_id']}")
     await bot.forward_message(ADMIN_ID, message.chat.id, message.message_id)
     await message.reply("Скрин получен! Ожидай подтверждение от оператора.")
 
@@ -182,12 +183,6 @@ async def process_admin_action(callback_query: types.CallbackQuery):
         await bot.send_message(order["user_id"], f"❌ Заказ #{order_id} был отклонён. Свяжись с оператором.")
         await callback_query.message.edit_text(f"❌ Заказ #{order_id} отклонён.")
 
-if __name__ == "__main__":
-    executor.start_polling(dp, skip_updates=True)
-
-# временное хранилище для режима отправки фото пользователю
-awaiting_photo_to_send = {}
-
 @dp.message_handler(commands=["send"])
 async def send_photo_command(message: types.Message):
     if message.from_user.id != ADMIN_ID:
@@ -198,7 +193,13 @@ async def send_photo_command(message: types.Message):
         return await message.reply("Укажи номер заказа. Пример: /send 70214")
 
     order_id = int(args[1])
-    if order_id not in pending_orders:
+    order = None
+    for o in pending_orders.values():
+        if o["order_id"] == order_id:
+            order = o
+            break
+
+    if not order:
         return await message.reply("Заказ с таким номером не найден.")
 
     awaiting_photo_to_send[message.from_user.id] = order_id
@@ -207,20 +208,24 @@ async def send_photo_command(message: types.Message):
 @dp.message_handler(content_types=[types.ContentType.PHOTO, types.ContentType.DOCUMENT])
 async def admin_send_photo_to_user(message: types.Message):
     if message.from_user.id != ADMIN_ID:
-        return  # остальные пусть отправляют свои скрины, как раньше
+        return
 
     if message.from_user.id not in awaiting_photo_to_send:
-        return  # значит не в режиме ожидания отправки
+        return
 
     order_id = awaiting_photo_to_send.pop(message.from_user.id)
-    order = pending_orders.get(order_id)
-    if not order:
+    user = None
+    for o in pending_orders.values():
+        if o["order_id"] == order_id:
+            user = o["user_id"]
+            break
+
+    if not user:
         return await message.reply("Пользователь не найден.")
 
-    user_id = order["user_id"]
-
-    # Перешлём фото пользователю
-    await bot.send_message(user_id, f"📦 Фото по заказу #{order_id}")
-    await bot.forward_message(user_id, message.chat.id, message.message_id)
-
+    await bot.send_message(user, f"📦 Фото по заказу #{order_id}")
+    await bot.forward_message(user, message.chat.id, message.message_id)
     await message.reply(f"Фото успешно отправлено пользователю заказа #{order_id}.")
+
+if __name__ == "__main__":
+    executor.start_polling(dp, skip_updates=True)
