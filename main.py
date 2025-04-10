@@ -140,6 +140,9 @@ async def payment_selected(callback_query: types.CallbackQuery):
 
 @dp.message_handler(content_types=types.ContentType.PHOTO)
 async def handle_photo(message: types.Message):
+    if message.from_user.id not in user_orders:
+        return await message.reply("Сначала выбери товар /start")
+
     await bot.send_message(ADMIN_ID, f"📤 Скрин оплаты от @{message.from_user.username} для заказа #{user_orders[message.from_user.id]['order_id']}")
     await bot.forward_message(ADMIN_ID, message.chat.id, message.message_id)
     await message.reply("Скрин получен! Ожидай подтверждение от оператора.")
