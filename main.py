@@ -184,3 +184,43 @@ async def process_admin_action(callback_query: types.CallbackQuery):
 
 if __name__ == "__main__":
     executor.start_polling(dp, skip_updates=True)
+
+# временное хранилище для режима отправки фото пользователю
+awaiting_photo_to_send = {}
+
+@dp.message_handler(commands=["send"])
+async def send_photo_command(message: types.Message):
+    if message.from_user.id != ADMIN_ID:
+        return await message.reply("Нет доступа.")
+
+    args = message.text.split()
+    if len(args) < 2:
+        return await message.reply("Укажи номер заказа. Пример: /send 70214")
+
+    order_id = int(args[1])
+    if order_id not in pending_orders:
+        return await message.reply("Заказ с таким номером не найден.")
+
+    awaiting_photo_to_send[message.from_user.id] = order_id
+    await message.reply(f"Жду фото для отправки пользователю заказа #{order_id}.")
+
+@dp.message_handler(content_types=[types.ContentType.PHOTO, types.ContentType.DOCUMENT])
+async def admin_send_photo_to_user(message: types.Message):
+    if message.from_user.id != ADMIN_ID:
+        return  # остальные пусть отправляют свои скрины, как раньше
+
+    if message.from_user.id not in awaiting_photo_to_send:
+        return  # значит не в режиме ожидания отправки
+
+    order_id = awaiting_photo_to_send.pop(message.from_user.id)
+    order = pending_orders.get(order_id)
+    if not order:
+        return await message.reply("Пользователь не найден.")
+
+    user_id = order["user_id"]
+
+    # Перешлём фото пользователю
+    await bot.send_message(user_id, f"📦 Фото по заказу #{order_id}")
+    await bot.forward_message(user_id, message.chat.id, message.message_id)
+
+    await message.reply(f"Фото успешно отправлено пользователю заказа #{order_id}.")
