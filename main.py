@@ -5,8 +5,8 @@ from aiogram.dispatcher.filters import Command
 import logging
 import random
 
-API_TOKEN = '7596145421:AAFMkGYtjaJRxwP-G5sl-t3lj7jxQaPboqE'
-ADMIN_ID = 8070055531
+API_TOKEN = 'YOUR_API_TOKEN'
+ADMIN_ID = YOUR_ADMIN_ID  # Replace with your Telegram user ID
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
@@ -19,7 +19,7 @@ awaiting_photo_to_send = {}
 
 @dp.message_handler(commands=['start'])
 async def start_handler(message: types.Message):
-    user_orders.pop(message.from_user.id, None)  # чистим прошлые заказы
+    user_orders.pop(message.from_user.id, None)
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("Днепр", callback_data="city_dnepr"))
 
@@ -136,7 +136,7 @@ async def payment_selected(callback_query: types.CallbackQuery):
         f"Товар: {data['product']}\n"
         f"Цена: {data['price']}\n\n"
         "Выбран метод оплаты на банковскую карту.\n"
-        "Для получения товара, оплатите на карту: 0000 0000 0000 0000 (вставь сам)\n"
+        "Для получения товара, оплатите на карту: 0000 0000 0000 0000\n"
         f"Сумма: {data['price']}\n\n"
         "После оплаты скинь скрин сюда."
     )
@@ -146,7 +146,7 @@ async def handle_photo(message: types.Message):
     if message.from_user.id not in user_orders:
         return await message.reply("Сначала выбери товар /start")
 
-    await bot.send_message(ADMIN_ID, f"📄 Скрин оплаты от @{message.from_user.username} для заказа #{user_orders[message.from_user.id]['order_id']}")
+    await bot.send_message(ADMIN_ID, f"Скрин оплаты от @{message.from_user.username} для заказа #{user_orders[message.from_user.id]['order_id']}")
     await bot.forward_message(ADMIN_ID, message.chat.id, message.message_id)
     await message.reply("Скрин получен! Ожидай подтверждение от оператора.")
 
@@ -216,7 +216,7 @@ async def admin_send_photo_to_user(message: types.Message):
     if not order:
         return await message.reply("Пользователь не найден.")
 
-    await bot.send_message(order["user_id"], f"📦 Фото по заказу #{order_id}")
+    await bot.send_message(order["user_id"], f"Фото по заказу #{order_id}")
     await bot.forward_message(order["user_id"], message.chat.id, message.message_id)
     await message.reply(f"Фото успешно отправлено пользователю заказа #{order_id}.")
 
